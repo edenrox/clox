@@ -1,9 +1,12 @@
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
+#include "object.h"
+#include "memory.h"
 #include "vm.h"
 
 VM vm;
@@ -28,9 +31,15 @@ static void runtimeError(const char* format, ...) {
 
 void initVM() {
   resetStack();
+  vm.objects = NULL;
+  initTable(&vm.globals);
+  initTable(&vm.strings);
 }
 
 void freeVM() {
+  freeTable(&vm.globals);
+  freeTable(&vm.strings);
+  freeObjects();
 }
 
 void push(Value value) {
@@ -51,9 +60,24 @@ static bool isFalsey(Value value) {
   return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
 }
 
+static void concatenate() {
+  ObjString* b = AS_STRING(pop());
+  ObjString* a = AS_STRING(pop());
+
+  int length = a->length + b->length;
+  char* chars = ALLOCATE(char, length + 1);
+  memcpy(chars, a->chars, a->length);
+  memcpy(chars + a->length, b->chars, b->length);
+  chars[length] = '\0';
+
+  ObjString* result = takeString(chars, length);
+  push(OBJ_VAL(result));
+}
+
 static InterpretResult run() {
 #define READ_BYTE() (*vm.ip++)
 #define READ_CONSTANT() (vm.chunk->constants.values[READ_BYTE()])
+#define READ_STRING() AS_STRING(READ_CONSTANT())
 
 #define BINARY_OP(valueType, op) \
   do { \
@@ -94,6 +118,37 @@ static InterpretResult run() {
       case OP_FALSE:
         push(BOOL_VAL(false));
         break;
+      case OP_POP:
+        pop();
+        break;
+      case OP_GET_GLOBAL: {
+        ObjString* name = READ_STRING();
+        Value value;
+        if (!tableGet(&vm.globals, name, &value)) {
+          runtimeError("Undefined variable '%s'.", name->chars);
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        push(value);
+        break;
+      }
+      case OP_DEFINE_GLOBAL: {
+        ObjString* name = READ_STRING();
+        printf("Define global [name=%s]", name->chars);
+        tableSet(&vm.globals, name, peek(0));
+        pop();
+        printTable(&vm.globals, "globals");
+        printTable(&vm.strings, "strings");
+        break;
+      }
+      case OP_SET_GLOBAL: {
+        ObjString* name = READ_STRING();
+        if (tableSet(&vm.globals, name, peek(0))) {
+          tableDelete(&vm.globals, name);
+          runtimeError("Undefined variable '%s'.", name->chars);
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        break;
+      }
       case OP_EQUAL: {
         Value b = pop();
         Value a = pop();
@@ -106,7 +161,16 @@ static InterpretResult run() {
       case OP_LESS:
         BINARY_OP(BOOL_VAL, <);
       case OP_ADD:
-        BINARY_OP(NUMBER_VAL, +);
+        if (IS_STRING(peek(0)) && IS_STRING(peek(1))) {
+          concatenate();
+        } else if (IS_NUMBER(peek(0)) && IS_NUMBER(peek(1))) {
+          double b = AS_NUMBER(pop());
+          double a = AS_NUMBER(pop());
+          push(NUMBER_VAL(a + b));
+        } else {
+          runtimeError("Operands must be two numbers or two strings.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
         break;
       case OP_SUBTRACT:
         BINARY_OP(NUMBER_VAL, -);
@@ -127,9 +191,13 @@ static InterpretResult run() {
         }
         push(NUMBER_VAL(-AS_NUMBER(pop())));
         break;
+      case OP_PRINT: {
+        printValue(pop());
+        printf("\n");
+        break;
+      }
       case OP_RETURN:
-      	printValue(pop());
-      	printf("\n");
+      	// Exit interpreter.
         return INTERPRET_OK;
     }
   }
@@ -137,6 +205,7 @@ static InterpretResult run() {
 #undef BINARY_OP
 #undef READ_BYTE
 #undef READ_CONSTANT
+#undef READ_STRING
 }
 
 InterpretResult interpret(const char* source) {

@@ -31,6 +31,9 @@ static Entry* findEntry(Entry* entries, int capacity, ObjString* key) {
           tombstone = entry;
         }
       }
+    } else if (entry->key == key) {
+      // We found the key.
+      return entry;
     }
 
     index = (index + 1) % capacity;
@@ -142,5 +145,32 @@ ObjString* tableFindString(Table* table, const char* chars, int length, uint32_t
     }
 
     index = (index + 1) % table->capacity;
+  }
+}
+
+void printTable(Table* table, const char* name) {
+  printf("Table Debug output\n");
+  printf("==================\n");
+  printf("  name: %s\n", name);
+  printf("  count: %d", table->count);
+  printf("  capacity: %d\n", table->capacity);
+  printf("  Table Content:\n");
+  for (int i = 0; i < table->capacity; i++) {
+    Entry entry = table->entries[i];
+    if (entry.key == NULL && IS_NIL(entry.value)) {
+      // empty entry
+      continue;
+    }
+    printf("    index: %d\n", i);
+    if (entry.key == NULL) {
+      // tombstone
+      printf("    tombstone\n");
+    } else {
+      // actual entry
+      printf("    key: %s\n", entry.key->chars);
+      printf("    value: ");
+      printValue(entry.value);
+      printf("\n");
+    }
   }
 }
