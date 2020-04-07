@@ -203,6 +203,17 @@ static InterpretResult run() {
         frame->slots[slot] = peek(0);
         break;
       }
+      case OP_INC_LOCAL: {
+        uint8_t slot = READ_BYTE();
+        Value value = frame->slots[slot];
+        if (!IS_NUMBER(value)) {
+          runtimeError("Can only increment a number.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        AS_NUMBER(value)++;
+        push(value);
+        break;
+      }
       case OP_GET_GLOBAL: {
         ObjString* name = READ_STRING();
         Value value;
