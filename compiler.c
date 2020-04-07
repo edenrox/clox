@@ -418,13 +418,11 @@ static void number(bool canAssign) {
 }
 
 static void or_(bool canAssign) {
-  int elseJump = emitJump(OP_JUMP_IF_FALSE);
-  int endJump = emitJump(OP_JUMP);
-
-  patchJump(elseJump);
+  int endJump = emitJump(OP_JUMP_IF_TRUE);
+  
   emitByte(OP_POP);
-
   parsePrecedence(PREC_OR);
+
   patchJump(endJump);
 }
 
@@ -502,14 +500,14 @@ ParseRule rules[] = {
   { string,   NULL,    PREC_NONE },       // TOKEN_STRING          
   { number,   NULL,    PREC_NONE },       // TOKEN_NUMBER          
   { NULL,     and_,    PREC_AND },        // TOKEN_AND             
-  { NULL,     or_,     PREC_OR },         // TOKEN_CLASS           
+  { NULL,     NULL,    PREC_NONE },       // TOKEN_CLASS           
   { NULL,     NULL,    PREC_NONE },       // TOKEN_ELSE            
   { literal,  NULL,    PREC_NONE },       // TOKEN_FALSE           
   { NULL,     NULL,    PREC_NONE },       // TOKEN_FOR             
   { NULL,     NULL,    PREC_NONE },       // TOKEN_FUN             
   { NULL,     NULL,    PREC_NONE },       // TOKEN_IF              
   { literal,  NULL,    PREC_NONE },       // TOKEN_NIL             
-  { NULL,     NULL,    PREC_NONE },       // TOKEN_OR              
+  { NULL,     or_,     PREC_OR },         // TOKEN_OR              
   { NULL,     NULL,    PREC_NONE },       // TOKEN_PRINT           
   { NULL,     NULL,    PREC_NONE },       // TOKEN_RETURN          
   { NULL,     NULL,    PREC_NONE },       // TOKEN_SUPER           

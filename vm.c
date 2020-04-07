@@ -218,8 +218,6 @@ static InterpretResult run() {
         printf("Define global [name=%s]", name->chars);
         tableSet(&vm.globals, name, peek(0));
         pop();
-        printTable(&vm.globals, "globals");
-        printTable(&vm.strings, "strings");
         break;
       }
       case OP_SET_GLOBAL: {
@@ -287,6 +285,13 @@ static InterpretResult run() {
       case OP_JUMP_IF_FALSE: {
         uint16_t offset = READ_SHORT();
         if (isFalsey(peek(0))) {
+          frame->ip += offset;
+        }
+        break;
+      }
+      case OP_JUMP_IF_TRUE: {
+        uint16_t offset = READ_SHORT();
+        if (!isFalsey(peek(0))) {
           frame->ip += offset;
         }
         break;
