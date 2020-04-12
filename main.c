@@ -69,7 +69,7 @@ int main(int argc, const char* argv[]) {
     printf("read,evaluate, print loop\n");
     repl();
   } else if (argc == 2) {
-    printf("run fil\n");
+    printf("run file: %s\n", argv[1]);
     runFile(argv[1]);
   } else {
     fprintf(stderr, "Usage: clox [path]\n");
