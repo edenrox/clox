@@ -66,6 +66,11 @@ static void blackenObject(Obj* object) {
 #endif                                  
 
   switch (object->type) {
+    case OBJ_CLASS: {
+      ObjClass* klass = (ObjClass*) object;
+      markObject((Obj*) klass->name);
+      break;
+    }
     case OBJ_CLOSURE: {
       ObjClosure* closure = (ObjClosure*) object;
       markObject((Obj*) closure->function);
@@ -78,6 +83,12 @@ static void blackenObject(Obj* object) {
       ObjFunction* function = (ObjFunction*) object;
       markObject((Obj*) function->name);
       markArray(&function->chunk.constants);
+      break;
+    }
+    case OBJ_INSTANCE: {
+      ObjInstance* instance = (ObjInstance*) object;
+      markObject((Obj*) instance->klass);
+      markTable(&instance->fields);
       break;
     }
     case OBJ_UPVALUE:
@@ -94,6 +105,10 @@ static void freeObject(Obj* object) {
   printf("%p free type %d\n", (void*)object, object->type);
 #endif
   switch (object->type) {
+    case OBJ_CLASS: {
+      FREE(ObjClass, object);
+      break;
+    }
     case OBJ_CLOSURE: {
       ObjClosure* closure = (ObjClosure*) object;
       FREE_ARRAY(ObjUpvalue*, closure->upvalues, closure->upvalueCount);
@@ -104,6 +119,12 @@ static void freeObject(Obj* object) {
       ObjFunction* function = (ObjFunction*) object;
       freeChunk(&function->chunk);
       FREE(ObjFunction, object);
+      break;
+    }
+    case OBJ_INSTANCE: {
+      ObjInstance* instance = (ObjInstance*) object;
+      freeTable(&instance->fields);
+      FREE(ObjInstance, object);
       break;
     }
     case OBJ_NATIVE: {
@@ -123,17 +144,32 @@ static void freeObject(Obj* object) {
 }
 
 static void markRoots() {
+#ifdef DEBUG_LOG_GC
+  printf("Mark stack\n");
+#endif
   for (Value* slot = vm.stack; slot <= vm.stackTop; slot++) {
     markValue(*slot);
   }
 
+#ifdef DEBUG_LOG_GC
+  printf("Mark globals\n");
+#endif
   markTable(&vm.globals);
+#ifdef DEBUG_LOG_GC
+  printf("Mark compiler roots\n");
+#endif
   markCompilerRoots();
 
+#ifdef DEBUG_LOG_GC
+  printf("Mark frame closures\n");
+#endif
   for (int i = 0; i < vm.frameCount; i++) {
     markObject((Obj*) vm.frames[i].closure);
   }
 
+#ifdef DEBUG_LOG_GC
+  printf("Mark upvalues\n");
+#endif
   for (ObjUpvalue* upvalue = vm.openUpvalues;
       upvalue != NULL;
       upvalue = upvalue->next) {
@@ -164,8 +200,7 @@ static void sweep() {
         previous->next = object;
       } else {
         vm.objects = object;
-      }
-
+      } 
       freeObject(unreached);
     }
   }
