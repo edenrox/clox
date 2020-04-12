@@ -66,9 +66,16 @@ static void blackenObject(Obj* object) {
 #endif                                  
 
   switch (object->type) {
+    case OBJ_BOUND_METHOD: {
+      ObjBoundMethod* bound = (ObjBoundMethod*) object;
+      markValue(bound->receiver);
+      markObject((Obj*) bound->method);
+      break;
+    }
     case OBJ_CLASS: {
       ObjClass* klass = (ObjClass*) object;
       markObject((Obj*) klass->name);
+      markTable(&klass->methods);
       break;
     }
     case OBJ_CLOSURE: {
@@ -102,10 +109,17 @@ static void blackenObject(Obj* object) {
 
 static void freeObject(Obj* object) {
 #ifdef DEBUG_LOG_GC
-  printf("%p free type %d\n", (void*)object, object->type);
+  printf("%p free type=%d value=", (void*)object, object->type);
+  printValue(OBJ_VAL(object));
+  printf("\n");
 #endif
   switch (object->type) {
+    case OBJ_BOUND_METHOD:
+      FREE(ObjBoundMethod, object);
+      break;
     case OBJ_CLASS: {
+      ObjClass* klass = (ObjClass*) object;
+      freeTable(&klass->methods);
       FREE(ObjClass, object);
       break;
     }
@@ -144,32 +158,25 @@ static void freeObject(Obj* object) {
 }
 
 static void markRoots() {
+  // Mark the stack
 #ifdef DEBUG_LOG_GC
-  printf("Mark stack\n");
+  printf("Mark stack start=%p end=%p\n", vm.stack, vm.stackTop);
 #endif
-  for (Value* slot = vm.stack; slot <= vm.stackTop; slot++) {
+  for (Value* slot = vm.stack; slot < vm.stackTop; slot++) {
     markValue(*slot);
   }
 
-#ifdef DEBUG_LOG_GC
-  printf("Mark globals\n");
-#endif
+  // Mark globals
   markTable(&vm.globals);
-#ifdef DEBUG_LOG_GC
-  printf("Mark compiler roots\n");
-#endif
   markCompilerRoots();
+  markObject((Obj*) vm.initString);
 
-#ifdef DEBUG_LOG_GC
-  printf("Mark frame closures\n");
-#endif
+  // Mark frame closures
   for (int i = 0; i < vm.frameCount; i++) {
     markObject((Obj*) vm.frames[i].closure);
   }
 
-#ifdef DEBUG_LOG_GC
-  printf("Mark upvalues\n");
-#endif
+  // Mark upvalues
   for (ObjUpvalue* upvalue = vm.openUpvalues;
       upvalue != NULL;
       upvalue = upvalue->next) {
